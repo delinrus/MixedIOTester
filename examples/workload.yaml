@@ -1,0 +1,44 @@
+target:
+  type: file
+  path: ./testfile.bin
+  size: 1GiB
+  direct: false
+  create_if_missing: true
+
+io:
+  engine: io_uring
+  queue_depth: 64
+  alignment: 4096
+
+test:
+  runtime_sec: 10
+  warmup_sec: 2
+  region_start: 0
+  region_size: 512MiB
+  random_seed: 12345
+
+operations:
+  RR:
+    enabled: true
+    share: 0.5
+    block_size: 4KiB
+  RW:
+    enabled: true
+    share: 0.2
+    block_size: 8KiB
+  SR:
+    enabled: true
+    share: 0.1
+    block_size: 64KiB
+  SW:
+    enabled: true
+    share: 0.2
+    block_size: 256KiB
+
+output:
+  print_summary: true
+  save_json: true
+  save_csv: true
+  json_path: ./result.json
+  csv_path: ./result.csv
+
