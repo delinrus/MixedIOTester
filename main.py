@@ -34,9 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_effective_config or args.dry_run:
         print(json.dumps(config_to_dict(cfg), indent=2))
     if args.dry_run:
-        # rough memory estimate: queue depth * max block size
+        # rough memory estimate: num_threads * max write block size buffer
         max_bs = max(op.block_size for op in cfg.operations.values() if op.enabled and op.share > 0)
-        estimate = cfg.io.queue_depth * max_bs
+        estimate = cfg.test.num_threads * max_bs
         print(f"estimated_buffer_bytes={estimate}")
         return 0
 

@@ -20,6 +20,11 @@ def _fmt_bw(bps: float) -> str:
 def print_summary(cfg: WorkloadConfig, summary: Dict[str, Any]) -> None:
     print("=== MixedIOTester Summary ===")
     print(f"runtime_sec={summary['runtime_sec']:.3f} interrupted={summary['interrupted']}")
+    print(f"num_threads={cfg.test.num_threads}")
+    print("---- target mix ----")
+    for op, op_cfg in cfg.operations.items():
+        if op_cfg.enabled and op_cfg.share > 0:
+            print(f"{op.value}: {op_cfg.share:.4f} block_size={op_cfg.block_size}")
     total = summary["total"]
     print(f"total_iops={total['iops']:.2f}")
     print(f"total_bw={_fmt_bw(total['bandwidth_Bps'])}")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import threading
 from typing import Any, Dict
 
 from model import CompletionRecord, OpStats, OperationType, RunStats, WorkloadConfig
@@ -17,28 +18,41 @@ def percentile_ns(values: list[int], p: float) -> int:
 class StatsCollector:
     def __init__(self, cfg: WorkloadConfig):
         self.cfg = cfg
+        self._lock = threading.Lock()
         self.run = RunStats(per_op={op: OpStats() for op in OperationType})
 
-    def mark_issued(self, op: OperationType) -> None:
-        self.run.per_op[op].issued_ops += 1
+    def reset_measured(self) -> None:
+        with self._lock:
+            self.run = RunStats(per_op={op: OpStats() for op in OperationType})
+
+    def mark_issued(self, op: OperationType, phase: str) -> None:
+        if phase != "measured":
+            return
+        with self._lock:
+            self.run.per_op[op].issued_ops += 1
 
     def mark_completion(self, rec: CompletionRecord) -> None:
-        op_stats = self.run.per_op[rec.metadata.op]
-        op_stats.completed_ops += 1
-        if rec.result < 0:
-            op_stats.errors += 1
+        if rec.metadata.phase != "measured":
             return
-        op_stats.bytes += rec.result
-        latency = rec.completion_ts_ns - rec.metadata.submit_ts_ns
-        if rec.metadata.phase == "measured":
+        with self._lock:
+            op_stats = self.run.per_op[rec.metadata.op]
+            op_stats.completed_ops += 1
+            if rec.result < 0:
+                op_stats.errors += 1
+                return
+            op_stats.bytes += rec.result
+            latency = rec.completion_ts_ns - rec.metadata.submit_ts_ns
             op_stats.latency_ns.append(latency)
 
     def set_runtime(self, seconds: float, interrupted: bool) -> None:
-        self.run.runtime_sec = seconds
-        self.run.interrupted = interrupted
+        with self._lock:
+            self.run.runtime_sec = seconds
+            self.run.interrupted = interrupted
 
     def build_summary(self) -> Dict[str, Any]:
-        runtime = self.run.runtime_sec if self.run.runtime_sec > 0 else 1e-9
+        with self._lock:
+            run = self.run
+        runtime = run.runtime_sec if run.runtime_sec > 0 else 1e-9
         per_op = {}
         totals = {
             "issued_ops": 0,
@@ -47,7 +61,7 @@ class StatsCollector:
             "errors": 0,
             "latency_ns": [],
         }
-        for op, st in self.run.per_op.items():
+        for op, st in run.per_op.items():
             avg = int(sum(st.latency_ns) / len(st.latency_ns)) if st.latency_ns else 0
             p50 = percentile_ns(st.latency_ns, 0.50)
             p95 = percentile_ns(st.latency_ns, 0.95)
@@ -88,18 +102,18 @@ class StatsCollector:
         }
 
         issued_mix = {
-            op.value: (self.run.per_op[op].issued_ops / totals["issued_ops"] if totals["issued_ops"] else 0.0)
+            op.value: (run.per_op[op].issued_ops / totals["issued_ops"] if totals["issued_ops"] else 0.0)
             for op in OperationType
         }
         completed_mix = {
             op.value: (
-                self.run.per_op[op].completed_ops / totals["completed_ops"] if totals["completed_ops"] else 0.0
+                run.per_op[op].completed_ops / totals["completed_ops"] if totals["completed_ops"] else 0.0
             )
             for op in OperationType
         }
         return {
-            "runtime_sec": self.run.runtime_sec,
-            "interrupted": self.run.interrupted,
+            "runtime_sec": run.runtime_sec,
+            "interrupted": run.interrupted,
             "per_op": per_op,
             "total": total_summary,
             "achieved_mix_issued": issued_mix,
@@ -107,5 +121,6 @@ class StatsCollector:
         }
 
     def as_dict(self) -> Dict[str, Any]:
-        return asdict(self.run)
+        with self._lock:
+            return asdict(self.run)
 

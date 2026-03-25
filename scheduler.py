@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import threading
 from dataclasses import dataclass
 from typing import Dict
 
@@ -17,6 +18,7 @@ class FixedMixScheduler:
     def __init__(self, cfg: WorkloadConfig):
         self.cfg = cfg
         self._rng = random.Random(cfg.test.random_seed)
+        self._lock = threading.Lock()
         self._states: Dict[OperationType, OpRuntimeState] = {}
         self._active_ops = []
         for op, op_cfg in cfg.operations.items():
@@ -28,25 +30,28 @@ class FixedMixScheduler:
         self._request_id = 0
 
     def next_request(self) -> ScheduledRequest:
-        op = self._pick_op()
-        op_cfg = self.cfg.operations[op]
-        offset = self._next_offset(op, op_cfg)
-        req = ScheduledRequest(
-            request_id=self._request_id,
-            op=op,
-            offset=offset,
-            block_size=op_cfg.block_size,
-        )
-        self._request_id += 1
-        self._states[op].issued += 1
-        self._total_issued += 1
-        return req
+        with self._lock:
+            op = self._pick_op()
+            op_cfg = self.cfg.operations[op]
+            offset = self._next_offset(op, op_cfg)
+            req = ScheduledRequest(
+                request_id=self._request_id,
+                op=op,
+                offset=offset,
+                block_size=op_cfg.block_size,
+            )
+            self._request_id += 1
+            self._states[op].issued += 1
+            self._total_issued += 1
+            return req
 
     def issued_counts(self) -> Dict[OperationType, int]:
-        return {op: state.issued for op, state in self._states.items()}
+        with self._lock:
+            return {op: state.issued for op, state in self._states.items()}
 
     def total_issued(self) -> int:
-        return self._total_issued
+        with self._lock:
+            return self._total_issued
 
     def _pick_op(self) -> OperationType:
         best_op = self._active_ops[0]

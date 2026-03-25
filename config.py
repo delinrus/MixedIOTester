@@ -12,6 +12,7 @@ from model import (
     OperationConfig,
     OperationType,
     OutputConfig,
+    RuntimeConfig,
     TargetConfig,
     TestConfig,
     WorkloadConfig,
@@ -114,7 +115,7 @@ def load_config(path: str, overrides: list[str] | None = None) -> WorkloadConfig
 def validate_config(raw: Dict[str, Any]) -> WorkloadConfig:
     try:
         target_raw = raw["target"]
-        io_raw = raw["io"]
+        io_raw = raw.get("io", {})
         test_raw = raw["test"]
         ops_raw = raw["operations"]
     except KeyError as exc:
@@ -128,13 +129,13 @@ def validate_config(raw: Dict[str, Any]) -> WorkloadConfig:
         create_if_missing=bool(target_raw.get("create_if_missing", False)),
     )
     io_cfg = IOConfig(
-        engine=str(io_raw.get("engine", "io_uring")),
-        queue_depth=int(io_raw["queue_depth"]),
+        engine=str(io_raw.get("engine", "threads")),
         alignment=parse_size(io_raw.get("alignment", 4096)),
     )
     test_cfg = TestConfig(
         runtime_sec=int(test_raw["runtime_sec"]),
         warmup_sec=int(test_raw.get("warmup_sec", 0)),
+        num_threads=int(test_raw.get("num_threads", 1)),
         region_start=parse_size(test_raw.get("region_start", 0)),
         region_size=parse_size(test_raw["region_size"]),
         random_seed=test_raw.get("random_seed"),
@@ -146,6 +147,11 @@ def validate_config(raw: Dict[str, Any]) -> WorkloadConfig:
         save_csv=bool(output_raw.get("save_csv", False)),
         json_path=str(output_raw.get("json_path", "./result.json")),
         csv_path=str(output_raw.get("csv_path", "./result.csv")),
+    )
+    runtime_raw = raw.get("runtime", {})
+    runtime_cfg = RuntimeConfig(
+        abort_on_error=bool(runtime_raw.get("abort_on_error", False)),
+        debug_logging=bool(runtime_raw.get("debug_logging", False)),
     )
 
     operations: Dict[OperationType, OperationConfig] = {}
@@ -163,22 +169,29 @@ def validate_config(raw: Dict[str, Any]) -> WorkloadConfig:
             region_size=parse_size(op_raw["region_size"]) if "region_size" in op_raw else None,
         )
 
-    cfg = WorkloadConfig(target=target, io=io_cfg, test=test_cfg, operations=operations, output=output)
+    cfg = WorkloadConfig(
+        target=target,
+        io=io_cfg,
+        test=test_cfg,
+        operations=operations,
+        output=output,
+        runtime=runtime_cfg,
+    )
     _validate_semantics(cfg)
     return cfg
 
 
 def _validate_semantics(cfg: WorkloadConfig) -> None:
-    if cfg.io.engine != "io_uring":
-        raise ConfigError("Only io_uring engine is supported in MVP")
-    if cfg.io.queue_depth <= 0:
-        raise ConfigError("io.queue_depth must be > 0")
+    if cfg.io.engine != "threads":
+        raise ConfigError("Only threads engine is supported in MVP")
     if cfg.io.alignment <= 0:
         raise ConfigError("io.alignment must be > 0")
     if cfg.test.runtime_sec <= 0:
         raise ConfigError("test.runtime_sec must be > 0")
     if cfg.test.warmup_sec < 0:
         raise ConfigError("test.warmup_sec must be >= 0")
+    if cfg.test.num_threads <= 0:
+        raise ConfigError("test.num_threads must be > 0")
     if cfg.test.region_size <= 0:
         raise ConfigError("test.region_size must be > 0")
 

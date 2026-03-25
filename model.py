@@ -50,7 +50,6 @@ class TargetConfig:
 @dataclass(frozen=True)
 class IOConfig:
     engine: str
-    queue_depth: int
     alignment: int
 
 
@@ -58,9 +57,16 @@ class IOConfig:
 class TestConfig:
     runtime_sec: int
     warmup_sec: int
+    num_threads: int
     region_start: int
     region_size: int
     random_seed: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class RuntimeConfig:
+    abort_on_error: bool = False
+    debug_logging: bool = False
 
 
 @dataclass(frozen=True)
@@ -79,6 +85,7 @@ class WorkloadConfig:
     test: TestConfig
     operations: Dict[OperationType, OperationConfig]
     output: OutputConfig
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
 
 
 @dataclass(frozen=True)

@@ -8,8 +8,15 @@ from scheduler import FixedMixScheduler
 def _cfg():
     raw = {
         "target": {"type": "file", "path": "/tmp/a.bin", "size": "1GiB", "direct": False, "create_if_missing": True},
-        "io": {"engine": "io_uring", "queue_depth": 32, "alignment": 4096},
-        "test": {"runtime_sec": 1, "warmup_sec": 0, "region_start": 0, "region_size": "64MiB", "random_seed": 1},
+        "io": {"engine": "threads", "alignment": 4096},
+        "test": {
+            "runtime_sec": 1,
+            "warmup_sec": 0,
+            "num_threads": 1,
+            "region_start": 0,
+            "region_size": "64MiB",
+            "random_seed": 1,
+        },
         "operations": {
             "RR": {"enabled": True, "share": 0.7, "block_size": "4KiB"},
             "RW": {"enabled": True, "share": 0.1, "block_size": "4KiB"},

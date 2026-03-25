@@ -7,8 +7,15 @@ from scheduler import FixedMixScheduler
 def test_random_offsets_within_region():
     raw = {
         "target": {"type": "file", "path": "/tmp/a.bin", "size": "1GiB", "direct": False, "create_if_missing": True},
-        "io": {"engine": "io_uring", "queue_depth": 8, "alignment": 4096},
-        "test": {"runtime_sec": 1, "warmup_sec": 0, "region_start": 4096, "region_size": "4MiB", "random_seed": 42},
+        "io": {"engine": "threads", "alignment": 4096},
+        "test": {
+            "runtime_sec": 1,
+            "warmup_sec": 0,
+            "num_threads": 1,
+            "region_start": 4096,
+            "region_size": "4MiB",
+            "random_seed": 42,
+        },
         "operations": {
             "RR": {"enabled": True, "share": 1.0, "block_size": "8KiB"},
             "RW": {"enabled": False, "share": 0.0, "block_size": "4KiB"},
