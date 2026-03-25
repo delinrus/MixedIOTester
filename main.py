@@ -5,6 +5,7 @@ import json
 import sys
 
 from config import ConfigError, config_to_dict, load_config
+from calibration import write_calibration_csv
 from report import print_summary, write_csv_report, write_json_report
 from runner import Runner
 
@@ -20,6 +21,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--dry-run", action="store_true", help="Validate and print effective config only")
     p.add_argument("--print-effective-config", action="store_true", help="Print effective config JSON")
+    p.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="Run per-mode calibration and write csv (see calibration.* in config)",
+    )
     return p
 
 
@@ -38,6 +44,10 @@ def main(argv: list[str] | None = None) -> int:
         max_bs = max(op.block_size for op in cfg.operations.values() if op.enabled and op.share > 0)
         estimate = cfg.test.num_threads * max_bs
         print(f"estimated_buffer_bytes={estimate}")
+        return 0
+
+    if args.calibrate or cfg.calibration.enabled:
+        write_calibration_csv(cfg)
         return 0
 
     runner = Runner(cfg)

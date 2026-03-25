@@ -45,3 +45,19 @@ runtime:
   abort_on_error: false
   debug_logging: false
 
+calibration:
+  enabled: false
+  output_path: ./calibration.csv
+  append: true
+  runtime_sec: 60
+  warmup_sec: 0
+  # If empty, will use unique block sizes from enabled operations.
+  block_sizes: [4KiB, 8KiB, 16KiB, 32KiB, 64KiB, 128KiB, 256KiB, 1MiB]
+  # Optional per-mode thread count override (iodepth column).
+  # num_threads:
+  #   RR: 32
+  #   RW: 32
+  #   SR: 32
+  #   SW: 2
+  name_prefix: ""
+

@@ -8,6 +8,7 @@ from typing import Any, Dict
 import yaml
 
 from model import (
+    CalibrationConfig,
     IOConfig,
     OperationConfig,
     OperationType,
@@ -153,6 +154,22 @@ def validate_config(raw: Dict[str, Any]) -> WorkloadConfig:
         abort_on_error=bool(runtime_raw.get("abort_on_error", False)),
         debug_logging=bool(runtime_raw.get("debug_logging", False)),
     )
+    calibration_raw = raw.get("calibration", {})
+    cal_block_sizes = calibration_raw.get("block_sizes", [])
+    if cal_block_sizes is None:
+        cal_block_sizes = []
+    if not isinstance(cal_block_sizes, list):
+        raise ConfigError("calibration.block_sizes must be a list")
+    calibration_cfg = CalibrationConfig(
+        enabled=bool(calibration_raw.get("enabled", False)),
+        output_path=str(calibration_raw.get("output_path", "./calibration.csv")),
+        append=bool(calibration_raw.get("append", True)),
+        runtime_sec=int(calibration_raw.get("runtime_sec", 60)),
+        warmup_sec=int(calibration_raw.get("warmup_sec", 0)),
+        block_sizes=[parse_size(v) for v in cal_block_sizes],
+        num_threads={str(k): int(v) for k, v in (calibration_raw.get("num_threads", {}) or {}).items()},
+        name_prefix=str(calibration_raw.get("name_prefix", "")),
+    )
 
     operations: Dict[OperationType, OperationConfig] = {}
     for op in OperationType:
@@ -176,6 +193,7 @@ def validate_config(raw: Dict[str, Any]) -> WorkloadConfig:
         operations=operations,
         output=output,
         runtime=runtime_cfg,
+        calibration=calibration_cfg,
     )
     _validate_semantics(cfg)
     return cfg
@@ -194,6 +212,14 @@ def _validate_semantics(cfg: WorkloadConfig) -> None:
         raise ConfigError("test.num_threads must be > 0")
     if cfg.test.region_size <= 0:
         raise ConfigError("test.region_size must be > 0")
+    if cfg.calibration.enabled:
+        if cfg.calibration.runtime_sec <= 0:
+            raise ConfigError("calibration.runtime_sec must be > 0")
+        if cfg.calibration.warmup_sec < 0:
+            raise ConfigError("calibration.warmup_sec must be >= 0")
+        for bs in cfg.calibration.block_sizes:
+            if bs <= 0:
+                raise ConfigError("calibration.block_sizes must contain only positive sizes")
 
     active = [op for op, op_cfg in cfg.operations.items() if op_cfg.enabled and op_cfg.share > 0]
     if not active:

@@ -70,6 +70,19 @@ class RuntimeConfig:
 
 
 @dataclass(frozen=True)
+class CalibrationConfig:
+    enabled: bool = False
+    output_path: str = "./calibration.csv"
+    append: bool = True
+    runtime_sec: int = 60
+    warmup_sec: int = 0
+    block_sizes: list[int] = field(default_factory=list)
+    # Optional per-mode thread count override, e.g. {"RR": 32, "SW": 2}
+    num_threads: Dict[str, int] = field(default_factory=dict)
+    name_prefix: str = ""
+
+
+@dataclass(frozen=True)
 class OutputConfig:
     print_summary: bool = True
     save_json: bool = True
@@ -86,6 +99,7 @@ class WorkloadConfig:
     operations: Dict[OperationType, OperationConfig]
     output: OutputConfig
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+    calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
 
 
 @dataclass(frozen=True)
