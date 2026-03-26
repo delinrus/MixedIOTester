@@ -82,11 +82,15 @@ class Runner:
         if self.cfg.target.type == "file":
             if self.cfg.target.create_if_missing:
                 flags |= os.O_CREAT
+            if self.cfg.target.direct and hasattr(os, "O_DIRECT"):
+                flags |= os.O_DIRECT
             self._fd = os.open(self.cfg.target.path, flags, 0o644)
             if self.cfg.target.size is not None and self.cfg.target.size > 0:
                 os.ftruncate(self._fd, self.cfg.target.size)
             return
         if self.cfg.target.type == "block_device":
+            if self.cfg.target.direct and hasattr(os, "O_DIRECT"):
+                flags |= os.O_DIRECT
             self._fd = os.open(self.cfg.target.path, flags)
             return
         raise RuntimeError(f"Unsupported target type: {self.cfg.target.type}")
@@ -96,8 +100,12 @@ class Runner:
         if self.cfg.target.type == "file":
             if self.cfg.target.create_if_missing:
                 flags |= os.O_CREAT
+            if self.cfg.target.direct and hasattr(os, "O_DIRECT"):
+                flags |= os.O_DIRECT
             return os.open(self.cfg.target.path, flags, 0o644)
         if self.cfg.target.type == "block_device":
+            if self.cfg.target.direct and hasattr(os, "O_DIRECT"):
+                flags |= os.O_DIRECT
             return os.open(self.cfg.target.path, flags)
         raise RuntimeError(f"Unsupported target type: {self.cfg.target.type}")
 
