@@ -35,6 +35,21 @@ def _default_case_name(op: OperationType, bs_bytes: int) -> str:
     return f"{op.value.lower()}_{_fmt_bs_short(bs_bytes)}"
 
 
+def _planned_cases(cfg: WorkloadConfig) -> list[tuple[OperationType, int, int]]:
+    if not cfg.calibration.block_sizes:
+        # If not specified, calibrate using the block_size from config for each enabled op.
+        sizes = sorted({oc.block_size for oc in cfg.operations.values() if oc.enabled and oc.share > 0})
+    else:
+        sizes = cfg.calibration.block_sizes
+
+    out: list[tuple[OperationType, int, int]] = []
+    for op in OperationType:
+        threads = cfg.calibration.num_threads.get(op.value, cfg.test.num_threads)
+        for bs in sizes:
+            out.append((op, bs, threads))
+    return out
+
+
 def _single_op_config(base: WorkloadConfig, op: OperationType, bs_bytes: int, num_threads: int) -> WorkloadConfig:
     ops = {}
     for t, oc in base.operations.items():
@@ -54,32 +69,35 @@ def _single_op_config(base: WorkloadConfig, op: OperationType, bs_bytes: int, nu
 
 
 def iter_calibration_rows(cfg: WorkloadConfig) -> Iterable[list[str]]:
-    if not cfg.calibration.block_sizes:
-        # If not specified, calibrate using the block_size from config for each enabled op.
-        sizes = sorted({oc.block_size for oc in cfg.operations.values() if oc.enabled and oc.share > 0})
-    else:
-        sizes = cfg.calibration.block_sizes
-
-    for op in OperationType:
-        threads = cfg.calibration.num_threads.get(op.value, cfg.test.num_threads)
-        for bs in sizes:
-            case_cfg = _single_op_config(cfg, op=op, bs_bytes=bs, num_threads=threads)
-            name = f"{cfg.calibration.name_prefix}{_default_case_name(op, bs)}"
-            summary = Runner(case_cfg).run()
-            total = summary["total"]
-            ts = datetime.now().isoformat()
-            iops = float(total["iops"])
-            bw_mib_s = float(total["bandwidth_Bps"]) / (1024.0 * 1024.0)
-            yield [
-                ts,
-                name,
-                _rw_label(op),
-                _fmt_bs_short(bs),
-                str(threads),
-                str(case_cfg.test.runtime_sec),
-                f"{iops:.0f}",
-                f"{bw_mib_s:.3f}",
-            ]
+    cases = _planned_cases(cfg)
+    total_cases = len(cases)
+    for idx, (op, bs, threads) in enumerate(cases, start=1):
+        name = f"{cfg.calibration.name_prefix}{_default_case_name(op, bs)}"
+        print(
+            f"[calibration {idx}/{total_cases}] running name={name} rw={_rw_label(op)} "
+            f"bs={_fmt_bs_short(bs)} iodepth={threads} runtime_s={cfg.calibration.runtime_sec}",
+            flush=True,
+        )
+        case_cfg = _single_op_config(cfg, op=op, bs_bytes=bs, num_threads=threads)
+        summary = Runner(case_cfg).run()
+        total = summary["total"]
+        ts = datetime.now().isoformat()
+        iops = float(total["iops"])
+        bw_mib_s = float(total["bandwidth_Bps"]) / (1024.0 * 1024.0)
+        print(
+            f"[calibration {idx}/{total_cases}] done name={name} iops={iops:.0f} bw_mib_s={bw_mib_s:.3f}",
+            flush=True,
+        )
+        yield [
+            ts,
+            name,
+            _rw_label(op),
+            _fmt_bs_short(bs),
+            str(threads),
+            str(case_cfg.test.runtime_sec),
+            f"{iops:.0f}",
+            f"{bw_mib_s:.3f}",
+        ]
 
 
 def write_calibration_csv(cfg: WorkloadConfig) -> None:
@@ -87,10 +105,14 @@ def write_calibration_csv(cfg: WorkloadConfig) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     mode = "a" if cfg.calibration.append else "w"
     write_header = (not p.exists()) or (not cfg.calibration.append)
+    total_cases = len(_planned_cases(cfg))
+    print(f"[calibration] output={p} cases={total_cases} append={cfg.calibration.append}", flush=True)
     with p.open(mode, encoding="utf-8", newline="") as fh:
         w = csv.writer(fh, lineterminator="\n")
         if write_header:
             w.writerow(["ts", "name", "rw", "bs", "iodepth", "runtime_s", "iops", "bw_mib_s"])
         for row in iter_calibration_rows(cfg):
             w.writerow(row)
+            fh.flush()
+    print(f"[calibration] completed output={p}", flush=True)
 
