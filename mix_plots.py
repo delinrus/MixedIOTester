@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import replace
 from pathlib import Path
 from typing import Iterable
@@ -122,15 +123,48 @@ def _save_plot(points: list[tuple[int, float]], title: str, path: Path) -> None:
     plt.close()
 
 
+def _write_points_csv(rows: list[list[str]], path: Path) -> None:
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh, lineterminator="\n")
+        writer.writerow(
+            [
+                "profile",
+                "rr_share_pct",
+                "sr_share_pct",
+                "rw_share_pct",
+                "sw_share_pct",
+                "block_size_kib",
+                "iops",
+            ]
+        )
+        writer.writerows(rows)
+
+
 def generate_mix_plots(base_cfg: WorkloadConfig, output_dir: str) -> None:
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     profiles = _build_profiles()
     total = len(profiles)
+    csv_rows: list[list[str]] = []
     for idx, (name, shares) in enumerate(profiles, start=1):
         print(f"[mix-plots {idx}/{total}] running profile={name}", flush=True)
         points = _iter_profile_iops(base_cfg, shares, BLOCK_SIZES_BYTES)
         plot_path = out_dir / f"{name}.png"
         _save_plot(points, _shares_title(shares), plot_path)
+        for block_kib, iops in points:
+            csv_rows.append(
+                [
+                    name,
+                    f"{shares.get(OperationType.RR, 0.0) * 100:.0f}",
+                    f"{shares.get(OperationType.SR, 0.0) * 100:.0f}",
+                    f"{shares.get(OperationType.RW, 0.0) * 100:.0f}",
+                    f"{shares.get(OperationType.SW, 0.0) * 100:.0f}",
+                    str(block_kib),
+                    f"{iops:.6f}",
+                ]
+            )
         print(f"[mix-plots {idx}/{total}] saved={plot_path}", flush=True)
+    csv_path = out_dir / "mix_iops_vs_block_size.csv"
+    _write_points_csv(csv_rows, csv_path)
+    print(f"[mix-plots] saved={csv_path}", flush=True)
