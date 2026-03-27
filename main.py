@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-
 from config import ConfigError, config_to_dict, load_config
 from calibration import write_calibration_csv
 from report import print_summary, write_csv_report, write_json_report
@@ -25,6 +24,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--calibrate",
         action="store_true",
         help="Run per-mode calibration and write csv (see calibration.* in config)",
+    )
+    p.add_argument(
+        "--mix-plots",
+        action="store_true",
+        help="Run predefined mixed-operation matrix and save IOPS vs block-size plots",
+    )
+    p.add_argument(
+        "--mix-plots-dir",
+        default="./mix_plots",
+        help="Output directory for mix plots when --mix-plots is enabled",
     )
     return p
 
@@ -48,6 +57,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.calibrate or cfg.calibration.enabled:
         write_calibration_csv(cfg)
+        return 0
+
+    if args.mix_plots:
+        from mix_plots import generate_mix_plots
+
+        generate_mix_plots(cfg, output_dir=args.mix_plots_dir)
         return 0
 
     runner = Runner(cfg)

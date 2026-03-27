@@ -1,7 +1,8 @@
 target:
   type: file
-  path: ./testfile.bin
+  path: /mnt/c/fio-test/fio.dat
   size: 1GiB
+  direct: true
   create_if_missing: true
 
 io:

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Mixed IO workload generator with fixed mix scheduler"
 requires-python = ">=3.10"
 dependencies = [
+  "matplotlib>=3.8",
   "PyYAML>=6.0",
 ]
 
